@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>tts-lab — speech synthesis studio in your browser</title>
+<meta name="description" content="A focused studio for the Web Speech API: voice picker, rate/pitch/volume controls, live word highlighting, and a copyable recipe. Zero dependencies, works offline.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f8fa;--card:#fff;--border:#d8dee4;--text:#1f2328;--muted:#57606a;--accent:#1f6feb;--accent-d:#1a5fc8;--ok:#1a7f37;--warn:#9a6700;--mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:720px;margin:0 auto;padding:44px 20px 72px}
+h1{font-size:24px;letter-spacing:-.02em;margin:0}
+.sub{color:var(--muted);font-size:14px;margin:6px 0 0;max-width:62ch}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px;margin-top:22px}
+.card h2{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 14px}
+textarea,select,input[type=text]{font:inherit;border:1px solid var(--border);border-radius:6px;padding:9px 12px;background:#fff;color:var(--text);width:100%}
+textarea{min-height:140px;resize:vertical;font-size:14.5px}
+button{font:inherit;font-weight:600;border:none;border-radius:6px;padding:9px 18px;background:var(--accent);color:#fff;cursor:pointer}
+button:hover{background:var(--accent-d)}
+button:disabled{opacity:.45;cursor:default}
+button.ghost{background:#fff;color:var(--text);border:1px solid var(--border)}
+button.ghost:hover{background:#f6f8fa}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+.grid label{font-size:12.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px}
+.grid input[type=range]{width:100%;accent-color:var(--accent)}
+.val{font-family:var(--mono);font-size:12px;margin-top:2px}
+.status{font-size:13px;color:var(--muted);margin-top:10px;min-height:20px}
+.stage{margin-top:6px;font-size:16.5px;line-height:2;background:#f6f8fa;border:1px solid var(--border);border-radius:6px;padding:16px;min-height:80px}
+.stage .w{border-radius:3px;padding:1px 2px}
+.stage .w.now{background:#ddf4ff;color:#0969da}
+.stage .w.done{color:var(--muted)}
+.stats{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;display:flex;gap:18px;flex-wrap:wrap}
+.recipe{margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-family:var(--mono);font-size:12px;white-space:pre-wrap;word-break:break-all}
+.note{font-size:13px;color:var(--muted);background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-top:22px}
+.warn{border-color:#d4a72c;background:#fff8c5;color:#7d4e00}
+footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px}
+.vmeta{font-size:12.5px;color:var(--muted);margin-top:6px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>tts-lab</h1>
+  <p class="sub">A studio for the speech synthesis that is already inside your browser. Pick a voice, shape rate, pitch and volume, watch the spoken words highlight as they play, then copy the exact recipe to reproduce it anywhere.</p>
+</header>
+
+<section class="card">
+  <h2>Text</h2>
+  <textarea id="text" spellcheck="false">This is tts-lab. Your browser ships with a speech engine — no downloads, no accounts, no network calls. Rate, pitch and volume are just numbers on the Web Speech API, and this page makes them easy to tune.</textarea>
+  <div class="stats">
+    <span id="st-chars">0 chars</span>
+    <span id="st-words">0 words</span>
+    <span id="st-est">— est</span>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Voice</h2>
+  <select id="voice"><option value="">loading voices…</option></select>
+  <div class="vmeta" id="vmeta">—</div>
+  <div class="grid">
+    <div>
+      <label for="rate">Rate</label>
+      <input type="range" id="rate" min="0.5" max="2" step="0.05" value="1">
+      <div class="val" id="ratev">1.00×</div>
+    </div>
+    <div>
+      <label for="pitch">Pitch</label>
+      <input type="range" id="pitch" min="0" max="2" step="0.05" value="1">
+      <div class="val" id="pitchv">1.00</div>
+    </div>
+    <div>
+      <label for="vol">Volume</label>
+      <input type="range" id="vol" min="0" max="1" step="0.05" value="1">
+      <div class="val" id="volv">1.00</div>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Playback</h2>
+  <div class="controls">
+    <button id="speak" type="button">Speak</button>
+    <button id="pause" type="button" class="ghost" disabled>Pause</button>
+    <button id="resume" type="button" class="ghost" disabled>Resume</button>
+    <button id="stop" type="button" class="ghost" disabled>Stop</button>
+  </div>
+  <div class="status" id="status">Voices load asynchronously in most browsers — if the list is empty, wait a second or reload.</div>
+  <div class="stage" id="stage"><span id="stagetext" style="color:var(--muted)">The text will highlight here while it is spoken.</span></div>
+</section>
+
+<section class="card">
+  <h2>Recipe</h2>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button id="copy" type="button" class="ghost">Copy recipe</button>
+    <button id="snippet" type="button" class="ghost">Copy JS snippet</button>
+  </div>
+  <div class="recipe" id="recipe">—</div>
+</section>
+
+<div class="note warn" id="limitnote">
+  Honest limits: this is the browser's built-in engine (Web Speech API), not a neural voice model — quality depends entirely on the voices your OS/browser provides, and headless or minimal Linux installs may expose none. There is no way to export an audio file from this API; if you need a recording, capture it with your OS while it plays.
+</div>
+
+<div class="note">
+  Why this exists: hosted text-to-speech is metered per character, and the interesting new open models (Ming omni TTS, Gemini-style voice APIs) all need infrastructure. The boring browser API none of them replaces is still free, offline, and private. Treat this page as the tuning bench for it: find the exact rate/pitch/voice combination, then reproduce it in two lines of code anywhere the Web Speech API exists.
+</div>
+
+<footer>
+  Zero dependencies, no network calls after load · engine: <a href="https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis">Web Speech API (speechSynthesis)</a> · built by <a href="https://github.com/yeeeeezus">yeeeeezus</a>.
+</footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+var synth = window.speechSynthesis;
+var voices = [];
+var utter = null;
+var playing = false;
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+if (!synth){
+  $('status').textContent = 'This browser does not implement speechSynthesis. The tuning UI still works; playback will not.';
+  $('speak').disabled = true;
+}
+
+function loadVoices(){
+  if (!synth) return;
+  voices = synth.getVoices() || [];
+  var sel = $('voice');
+  if (!voices.length){
+    sel.innerHTML = '<option value="">no voices exposed by this browser/OS</option>';
+    $('vmeta').textContent = '—';
+    return;
+  }
+  var current = sel.value;
+  var html = '';
+  voices.forEach(function(v, i){
+    html += '<option value="' + i + '">' + esc(v.name) + ' — ' + esc(v.lang) + (v.default ? ' (default)' : '') + '</option>';
+  });
+  sel.innerHTML = html;
+  if (current && voices[current]) sel.value = current;
+  onVoiceChange();
+}
+
+function onVoiceChange(){
+  var v = voices[$('voice').value];
+  if (!v){ $('vmeta').textContent = voices.length ? voices.length + ' voices available' : '—'; return; }
+  $('vmeta').textContent = v.name + ' · lang=' + v.lang + ' · localService=' + !!v.localService + ' · default=' + !!v.default;
+}
+
+if (synth){
+  loadVoices();
+  // Chrome populates voices async
+  if (typeof synth.onvoiceschanged !== 'undefined') synth.onvoiceschanged = loadVoices;
+  setTimeout(loadVoices, 500);
+  setTimeout(loadVoices, 2000);
+}
+$('voice').addEventListener('change', onVoiceChange);
+
+['rate','pitch','vol'].forEach(function(id){
+  $(id).addEventListener('input', function(){
+    $(id + 'v').textContent = parseFloat($(id).value).toFixed(2) + (id === 'rate' ? '×' : '');
+    updateRecipe();
+  });
+});
+$('text').addEventListener('input', function(){ updateStats(); updateRecipe(); });
+$('voice').addEventListener('change', updateRecipe);
+
+function currentVoice(){ return voices[$('voice').value] || null; }
+
+function updateStats(){
+  var t = $('text').value;
+  var words = (t.trim().match(/\S+/g) || []).length;
+  $('st-chars').textContent = t.length + ' chars';
+  $('st-words').textContent = words + ' words';
+  // rough duration estimate: avg 165 wpm at rate 1
+  var rate = parseFloat($('rate').value);
+  if (words){
+    var secs = words / 165 * 60 / rate;
+    $('st-est').textContent = '≈' + (secs < 60 ? secs.toFixed(0) + 's' : Math.floor(secs/60) + 'm' + Math.round(secs%60) + 's') + ' at current rate';
+  } else $('st-est').textContent = '— est';
+}
+
+function recipe(){
+  var v = currentVoice();
+  return {
+    voice: v ? v.name : null,
+    lang: v ? v.lang : null,
+    rate: parseFloat($('rate').value),
+    pitch: parseFloat($('pitch').value),
+    volume: parseFloat($('vol').value)
+  };
+}
+
+function updateRecipe(){
+  var r = recipe();
+  $('recipe').textContent = JSON.stringify(r, null, 2);
+}
+updateStats();
+updateRecipe();
+
+/* ---------------- stage highlighting ---------------- */
+var wordSpans = [];
+
+function buildStage(){
+  var t = $('text').value;
+  var stage = $('stage');
+  stage.innerHTML = '';
+  wordSpans = [];
+  var re = /\S+/g;
+  var m, last = 0, html = '';
+  while ((m = re.exec(t)) !== null){
+    if (m.index > last) html += esc(t.slice(last, m.index));
+    html += '<span class="w" data-i="' + wordSpans.length + '">' + esc(m[0]) + '</span>';
+    wordSpans.push({ start: m.index, end: m.index + m[0].length });
+    last = m.index + m[0].length;
+  }
+  html += esc(t.slice(last));
+  stage.innerHTML = html || '<span style="color:var(--muted)">(empty)</span>';
+}
+
+function highlight(charIndex){
+  var idx = null;
+  for (var i = 0; i < wordSpans.length; i++){
+    if (charIndex >= wordSpans[i].start && charIndex < wordSpans[i].end){ idx = i; break; }
+    if (charIndex < wordSpans[i].start) break;
+  }
+  var spans = $('stage').querySelectorAll('.w');
+  for (var j = 0; j < spans.length; j++){
+    spans[j].className = 'w' + (idx !== null && j < idx ? ' done' : (j === idx ? ' now' : ''));
+  }
+}
+
+function clearStage(){
+  var spans = $('stage').querySelectorAll('.w');
+  for (var j = 0; j < spans.length; j++) spans[j].className = 'w';
+}
+
+/* ---------------- playback ---------------- */
+function setButtons(sp, pa, rs, st){
+  $('speak').disabled = sp; $('pause').disabled = pa;
+  $('resume').disabled = rs; $('stop').disabled = st;
+}
+
+function speak(){
+  if (!synth){ return; }
+  var t = $('text').value.trim();
+  if (!t){ $('status').textContent = 'Type some text first.'; return; }
+  synth.cancel();
+  utter = new SpeechSynthesisUtterance(t);
+  var v = currentVoice();
+  if (v){ utter.voice = v; utter.lang = v.lang; }
+  utter.rate = parseFloat($('rate').value);
+  utter.pitch = parseFloat($('pitch').value);
+  utter.volume = parseFloat($('vol').value);
+  buildStage();
+  playing = true;
+  setButtons(true, false, false, false);
+  $('status').textContent = 'Speaking…';
+  utter.onboundary = function(e){
+    if (e.name === 'word' || e.name === undefined){ highlight(e.charIndex); }
+  };
+  utter.onstart = function(){ setButtons(true, true, false, true); $('status').textContent = 'Speaking…'; };
+  utter.onend = function(){
+    playing = false;
+    setButtons(false, false, false, false);
+    clearStage();
+    $('status').textContent = 'Done.';
+  };
+  utter.onerror = function(e){
+    playing = false;
+    setButtons(false, false, false, false);
+    $('status').textContent = 'Speech error: ' + (e.error || 'unknown') + (e.error === 'not-allowed' ? ' — the browser blocked autoplay; click somewhere on the page first, then Speak.' : '');
+  };
+  synth.speak(utter);
+}
+
+$('speak').addEventListener('click', speak);
+$('pause').addEventListener('click', function(){
+  if (synth && playing){ synth.pause(); setButtons(true, false, true, true); $('status').textContent = 'Paused.'; }
+});
+$('resume').addEventListener('click', function(){
+  if (synth && playing){ synth.resume(); setButtons(true, true, false, true); $('status').textContent = 'Speaking…'; }
+});
+$('stop').addEventListener('click', function(){
+  if (synth){ synth.cancel(); playing = false; setButtons(false, false, false, false); clearStage(); $('status').textContent = 'Stopped.'; }
+});
+
+/* ---------------- copy ---------------- */
+function copyText(t, msg){
+  function done(){ $('status').textContent = msg; }
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(done, function(){ $('status').textContent = 'Clipboard blocked — select and copy manually.'; });
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e){}
+    document.body.removeChild(ta);
+  }
+}
+
+$('copy').addEventListener('click', function(){
+  copyText($('recipe').textContent, 'Recipe copied.');
+});
+
+$('snippet').addEventListener('click', function(){
+  var r = recipe();
+  var lines = [
+    'const u = new SpeechSynthesisUtterance(text);',
+    'u.rate = ' + r.rate + ';',
+    'u.pitch = ' + r.pitch + ';',
+    'u.volume = ' + r.volume + ';',
+    r.voice ? "// voice: " + r.voice + " (" + r.lang + ")" : null,
+    'speechSynthesis.speak(u);'
+  ].filter(Boolean);
+  copyText(lines.join('\n'), 'JS snippet copied.');
+});
+})();
+</script>
+</body>
+</html>
